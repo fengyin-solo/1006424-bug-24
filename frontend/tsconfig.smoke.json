@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "/tmp/tscout",
+    "rootDir": "/workspace/frontend/src",
+    "baseUrl": "/workspace/frontend",
+    "paths": { "@/*": ["src/*"] }
+  },
+  "include": [
+    "src/smoke-entry.ts",
+    "src/api/fluegas-alarm-service.ts",
+    "src/domain/**/*.ts",
+    "src/data/modules.ts",
+    "src/data/local-store.ts",
+    "src/data/seed.ts",
+    "src/data/types.ts"
+  ]
+}

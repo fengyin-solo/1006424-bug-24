@@ -57,3 +57,33 @@ export function resetRows(key: string): EntryRow[] {
 export function storageKey(): string {
   return STORAGE_KEY
 }
+
+// 业务集合（告警待核对台账、重复登记审计等）与模块清单分开存，互不干扰。
+const COLLECTION_PREFIX = `${STORAGE_KEY}:`
+
+function cloneCollection<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+export function loadCollection<T>(name: string, fallback: T): T {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return cloneCollection(fallback)
+  }
+  const raw = window.localStorage.getItem(COLLECTION_PREFIX + name)
+  if (!raw) {
+    window.localStorage.setItem(COLLECTION_PREFIX + name, JSON.stringify(fallback))
+    return cloneCollection(fallback)
+  }
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    window.localStorage.setItem(COLLECTION_PREFIX + name, JSON.stringify(fallback))
+    return cloneCollection(fallback)
+  }
+}
+
+export function saveCollection<T>(name: string, value: T): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem(COLLECTION_PREFIX + name, JSON.stringify(value))
+  }
+}

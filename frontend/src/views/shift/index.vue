@@ -24,6 +24,29 @@
       </span>
     </p>
 
+    <section class="todo-panel">
+      <h3>值班待办 · 烟气净化告警核对</h3>
+      <p class="page-desc">待办与净化列表、净化详情共用同一份判定：只认反应塔温度与活性炭喷射量，停运留档的记录不再挂待办。</p>
+      <table v-if="todos.length" class="data-table">
+        <thead>
+          <tr><th>净化编号</th><th>告警高低</th><th>判定依据</th><th>记录时间</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in todos" :key="item.recordId">
+            <td>{{ item.lineNo }}</td>
+            <td>
+              <span class="alarm-badge" :class="item.level === '偏高' ? 'badge-high' : item.level === '偏低' ? 'badge-low' : 'badge-missing'">
+                {{ item.level }}
+              </span>
+            </td>
+            <td>{{ item.reasons.join('；') }}</td>
+            <td>{{ item.recordTime }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="empty-state">当前没有需要核对的烟气净化告警</p>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -79,16 +102,18 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { fluegasAlarmApi, type ShiftTodo } from '@/api/fluegas-alarm-service'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('shift')
 const columns = ["交接编号", "值班班组", "班次", "交班人员", "接班人员", "交接事项", "交接时间", "交接状态"]
 const actions = ["发起交接", "确认交接", "登记遗留"]
 const statuses = ["待交接", "交接中", "已交接", "有遗留"]
-const stats = [{"label": "待交接班次", "value": 0}, {"label": "已交接班次", "value": 0}, {"label": "有遗留事项", "value": 0}]
+const stats = ref([{"label": "待交接班次", "value": 0}, {"label": "已交接班次", "value": 0}, {"label": "有遗留事项", "value": 0}])
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
+const todos = ref<ShiftTodo[]>([])
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
@@ -128,6 +153,12 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    todos.value = fluegasAlarmApi.shiftTodos()
+    stats.value = [
+      {"label": "待交接班次", "value": rows.value.filter((row) => String(row.status) === '待交接').length},
+      {"label": "已交接班次", "value": rows.value.filter((row) => String(row.status) === '已交接').length},
+      {"label": "烟气告警待办", "value": todos.value.length},
+    ]
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '值班交接班列表读取失败'
   }
