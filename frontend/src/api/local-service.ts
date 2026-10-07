@@ -1,3 +1,18 @@
+import {
+  ALARM_SNAPSHOT_FIELD,
+  buildShutdownSnapshot,
+  checkCemsAlarmEntry,
+  getCemsAlarmLedger,
+  getFluegasAlarmParams,
+  getFluegasAlarmViews,
+  getShiftAlarmTodos,
+  registerFluegasRecord,
+  updateFluegasAlarmParams,
+} from '@/domain/fluegas-alarm/fluegas-alarm'
+import type {
+  CemsLedgerEntry,
+  FluegasAlarmRow,
+} from '@/domain/fluegas-alarm/types'
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
@@ -49,6 +64,10 @@ export function runAction(key: string, id: number, action: string): ActionResult
     status: target,
     pending: target !== lastStatus,
     abnormal: NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
+  }
+  // 烟气净化线登记停运：停运瞬间把当时的告警高低拍快照留档，之后只读快照、不再重判。
+  if (key === 'fluegas' && target === '已停运') {
+    updated[ALARM_SNAPSHOT_FIELD] = buildShutdownSnapshot(updated)
   }
   const next = [...rows]
   next[index] = updated
@@ -103,3 +122,17 @@ export function loadOverview(): OverviewResult {
   ]
   return { cards, modules }
 }
+
+// ---- 烟气净化告警共用域 ----------------------------------------------------
+// 页面不做业务判断：列表、净化详情、值班待办、CEMS 待核对台账都从这里取
+// 同一份判定结果，取数来源只有 fluegas 记录，阈值高低只有一套口径。
+export {
+  checkCemsAlarmEntry,
+  getCemsAlarmLedger,
+  getFluegasAlarmParams,
+  getFluegasAlarmViews,
+  getShiftAlarmTodos,
+  registerFluegasRecord,
+  updateFluegasAlarmParams,
+}
+export type { CemsLedgerEntry, FluegasAlarmRow }

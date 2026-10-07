@@ -24,6 +24,37 @@
       </span>
     </p>
 
+    <!-- 值班待办：烟气净化告警高低直接取自净化记录的共用判定，不再跟着净化状态走 -->
+    <section class="panel">
+      <div class="panel-head">
+        <h3 class="panel-title">值班待办 · 烟气净化告警</h3>
+        <span class="panel-note">高低与「烟气净化运行」列表、净化详情同源；已停运净化线留档不派活</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>净化编号</th><th>异常指标</th><th>综合高低</th><th>净化状态</th><th>判定时间</th><th>处理</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="todo in alarmTodos" :key="todo.lineCode">
+            <td>{{ todo.lineCode }}</td>
+            <td>
+              <span v-for="m in abnormalMetricsOf(todo)" :key="m.metric" style="margin-right: 12px;">
+                {{ m.metric }} {{ m.value === null ? '缺测' : m.value }}{{ m.unit }}
+                <span :class="m.level === '高' ? 'badge badge-high' : 'badge badge-low'">{{ m.level }}</span>
+              </span>
+            </td>
+            <td><span :class="todo.overall === '高' ? 'badge badge-high' : 'badge badge-low'">{{ todo.overall }}</span></td>
+            <td>{{ todo.status }}</td>
+            <td>{{ todo.judgedAt }}</td>
+            <td><RouterLink class="link" :to="`/fluegas`">去净化详情核对</RouterLink></td>
+          </tr>
+          <tr v-if="!alarmTodos.length">
+            <td colspan="6" class="empty-state">在运净化线暂无高低告警，值班待办为空</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -75,10 +106,12 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  getShiftAlarmTodos,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import type { FluegasAlarmRow, MetricAlarm } from '@/domain/fluegas-alarm/types'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('shift')
@@ -92,6 +125,12 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+// 值班待办只认烟气净化记录的共用判定结果，页面自身不比大小。
+const alarmTodos = ref<FluegasAlarmRow[]>([])
+
+function abnormalMetricsOf(todo: FluegasAlarmRow): MetricAlarm[] {
+  return todo.metrics.filter((m) => m.level === '高' || m.level === '低')
+}
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -128,6 +167,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    alarmTodos.value = getShiftAlarmTodos()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '值班交接班列表读取失败'
   }

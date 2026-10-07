@@ -24,6 +24,38 @@
       </span>
     </p>
 
+    <!-- 待核对台账：由烟气净化告警判定结果自动同步，每台净化线每个指标只有一条 -->
+    <section class="panel">
+      <div class="panel-head">
+        <h3 class="panel-title">待核对台账 · 烟气净化告警同步</h3>
+        <span class="panel-note">共 {{ ledger.length }} 条（待核对 {{ pendingLedger.length }}）；同一净化线同一指标反复异常只流转同一条，不重复挂账</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>台账编号</th><th>净化编号</th><th>告警指标</th><th>判定值</th><th>高低</th><th>台账状态</th><th>判定时间</th><th>核对情况</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in ledger" :key="item.id">
+            <td>{{ item.ledgerNo }}</td>
+            <td>{{ item.lineCode }}</td>
+            <td>{{ item.metric }}</td>
+            <td>{{ item.value === null ? '缺测' : item.value }} {{ item.unit }}</td>
+            <td><span :class="item.level === '高' ? 'badge badge-high' : item.level === '低' ? 'badge badge-low' : 'badge badge-na'">{{ item.level }}</span></td>
+            <td><span :class="ledgerStatusClass(item.status)">{{ item.status }}</span></td>
+            <td>{{ item.judgedAt }}</td>
+            <td>{{ item.status === '已核对' ? `${item.checker} · ${item.checkedAt}` : '—' }}</td>
+            <td>
+              <button v-if="item.status === '待核对'" class="link" type="button" @click="checkEntry(item.id)">核对确认</button>
+              <span v-else class="panel-note">—</span>
+            </td>
+          </tr>
+          <tr v-if="!ledger.length">
+            <td colspan="9" class="empty-state">暂无烟气净化告警台账，各净化线指标均在正常区间</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -74,11 +106,14 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  checkCemsAlarmEntry,
   downloadEntries,
+  getCemsAlarmLedger,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import type { CemsLedgerEntry, CemsLedgerStatus } from '@/domain/fluegas-alarm/types'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('cems')
@@ -92,6 +127,32 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+// 待核对台账完全由告警域对账写入，页面只展示与核对，不自己判定高低。
+const ledger = ref<CemsLedgerEntry[]>([])
+const pendingLedger = computed(() => ledger.value.filter((item) => item.status === '待核对'))
+
+function ledgerStatusClass(status: CemsLedgerStatus): string {
+  if (status === '待核对') {
+    return 'badge badge-warn'
+  }
+  if (status === '已核对') {
+    return 'badge badge-done'
+  }
+  if (status === '停运留档') {
+    return 'badge badge-archive badge-frozen'
+  }
+  return 'badge badge-clear'
+}
+
+function checkEntry(id: number) {
+  errorMessage.value = ''
+  const result = checkCemsAlarmEntry(id, '值班管理员')
+  if (!result.ok) {
+    errorMessage.value = result.message
+    return
+  }
+  reload()
+}
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -128,6 +189,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    ledger.value = getCemsAlarmLedger()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '在线排放监测列表读取失败'
   }
